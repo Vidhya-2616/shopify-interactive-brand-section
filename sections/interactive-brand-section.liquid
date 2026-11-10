@@ -1,0 +1,750 @@
+{%- comment -%}
+  Interactive Brand Section
+  A full-height brand statement with an animated "woven" thread canvas that
+  reacts to the cursor, a large glyph revealed inside the threads, and a row of
+  tenets (up to 4) that rotate automatically until the visitor interacts.
+
+  Performance: the animation only runs while the section is on screen and the
+  tab is visible, and it is cleaned up when the section is removed in the
+  theme editor. With "reduce motion" enabled it renders a single static frame.
+{%- endcomment -%}
+
+{%- liquid
+  assign accent = section.settings.accent_color
+  assign accent_rgb = '186,138,28'
+  if accent != blank
+    assign accent_rgb = accent.red | append: ',' | append: accent.green | append: ',' | append: accent.blue
+  endif
+  assign bg = section.settings.bg_color | default: '#0C0404'
+  assign accent_css = accent | default: '#BA8A1C'
+-%}
+
+{%- if section.settings.load_fonts -%}
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    rel="stylesheet"
+    href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300;1,400&family=Inter:wght@300;400&display=swap"
+  >
+{%- endif -%}
+
+<style>
+  #ibs-{{ section.id }} {
+    --ibs-bg: {{ bg }};
+    --ibs-accent: {{ accent_css }};
+    --ibs-ivory: #FAFAFA;
+    --ibs-ivory-60: rgba(250, 250, 250, 0.7);
+    --ibs-ivory-40: rgba(250, 250, 250, 0.5);
+    --ibs-hairline: rgba(250, 250, 250, 0.12);
+    --ibs-serif: var(--font-heading-family, 'Cormorant Garamond', Georgia, serif);
+    --ibs-sans: var(--font-body-family, 'Inter', system-ui, sans-serif);
+
+    position: relative;
+    box-sizing: border-box;
+    min-height: 100vh;
+    min-height: 100svh;
+    padding: clamp(28px, 4vw, 56px) clamp(24px, 5vw, 80px);
+    overflow: hidden;
+    background: var(--ibs-bg);
+    color: var(--ibs-ivory);
+    font-family: var(--ibs-sans);
+    font-weight: 300;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  #ibs-{{ section.id }} *,
+  #ibs-{{ section.id }} *::before,
+  #ibs-{{ section.id }} *::after {
+    box-sizing: border-box;
+  }
+
+  #ibs-{{ section.id }} .ibs-canvas {
+    position: absolute;
+    inset: 0;
+    display: block;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+  }
+
+  #ibs-{{ section.id }} .ibs-inner {
+    position: relative;
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: clamp(32px, 5vw, 60px);
+    min-height: calc(100vh - 2 * clamp(28px, 4vw, 56px));
+    min-height: calc(100svh - 2 * clamp(28px, 4vw, 56px));
+  }
+
+  /* Top bar */
+  #ibs-{{ section.id }} .ibs-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 16px;
+  }
+
+  #ibs-{{ section.id }} .ibs-top span {
+    font-size: 11px;
+    letter-spacing: 0.42em;
+    text-transform: uppercase;
+    color: var(--ibs-ivory-40);
+  }
+
+  /* Headline */
+  #ibs-{{ section.id }} .ibs-mid {
+    max-width: 520px;
+    margin: auto 0;
+    pointer-events: none;
+  }
+
+  #ibs-{{ section.id }} .ibs-headline {
+    margin: 0;
+    font-family: var(--ibs-serif);
+    font-weight: 300;
+    font-size: clamp(40px, 8.5vw, 96px);
+    line-height: 1.05;
+    letter-spacing: 0.01em;
+    color: var(--ibs-ivory);
+  }
+
+  #ibs-{{ section.id }} .ibs-headline span {
+    display: block;
+    white-space: nowrap;
+  }
+
+  #ibs-{{ section.id }} .ibs-headline em {
+    font-style: italic;
+    font-weight: 400;
+    color: var(--ibs-accent);
+  }
+
+  #ibs-{{ section.id }} .ibs-sub {
+    max-width: 30ch;
+    margin: clamp(20px, 2.4vw, 34px) 0 0;
+    font-family: var(--ibs-serif);
+    font-style: italic;
+    font-size: clamp(15px, 1.4vw, 19px);
+    line-height: 1.7;
+    color: var(--ibs-ivory-60);
+  }
+
+  /* Tenets */
+  #ibs-{{ section.id }} .ibs-statements {
+    position: relative;
+    height: clamp(54px, 6vw, 76px);
+    margin-bottom: clamp(18px, 2.5vw, 30px);
+  }
+
+  #ibs-{{ section.id }} .ibs-statement {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: flex-end;
+    margin: 0;
+    font-family: var(--ibs-serif);
+    font-weight: 300;
+    font-size: clamp(24px, 3vw, 44px);
+    line-height: 1.1;
+    color: var(--ibs-ivory);
+    opacity: 0;
+    transform: translateY(8px);
+    transition: opacity 0.9s ease, transform 0.9s cubic-bezier(0.16, 1, 0.3, 1);
+    pointer-events: none;
+  }
+
+  #ibs-{{ section.id }} .ibs-statement.is-on {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  #ibs-{{ section.id }} .ibs-rail {
+    display: flex;
+    border-top: 1px solid var(--ibs-hairline);
+  }
+
+  #ibs-{{ section.id }} .ibs-tenet {
+    flex: 1;
+    display: flex;
+    align-items: baseline;
+    gap: 14px;
+    margin-top: -1px;
+    padding: clamp(16px, 2vw, 24px) 0 6px;
+    border: none;
+    border-top: 1px solid transparent;
+    background: none;
+    color: var(--ibs-ivory-40);
+    text-align: left;
+    cursor: pointer;
+    transition: color 0.6s ease, border-color 0.6s ease;
+  }
+
+  #ibs-{{ section.id }} .ibs-tenet:focus-visible,
+  #ibs-{{ section.id }} .ibs-pause:focus-visible {
+    outline: 2px solid var(--ibs-accent);
+    outline-offset: 4px;
+  }
+
+  #ibs-{{ section.id }} .ibs-tenet i {
+    font-family: var(--ibs-serif);
+    font-style: italic;
+    font-weight: 300;
+    font-size: clamp(18px, 1.8vw, 26px);
+    line-height: 1;
+  }
+
+  #ibs-{{ section.id }} .ibs-tenet b {
+    font-weight: 300;
+    font-size: 11px;
+    letter-spacing: 0.38em;
+    text-transform: uppercase;
+  }
+
+  #ibs-{{ section.id }} .ibs-tenet.is-on {
+    color: var(--ibs-ivory);
+    border-top-color: var(--ibs-accent);
+  }
+
+  #ibs-{{ section.id }} .ibs-foot {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 16px;
+    margin-top: clamp(24px, 3vw, 40px);
+  }
+
+  #ibs-{{ section.id }} .ibs-foot-text {
+    margin: 0;
+    font-family: var(--ibs-serif);
+    font-style: italic;
+    font-size: clamp(14px, 1.2vw, 16px);
+    color: var(--ibs-ivory-40);
+  }
+
+  #ibs-{{ section.id }} .ibs-pause {
+    padding: 4px 0;
+    border: none;
+    background: none;
+    color: var(--ibs-ivory-40);
+    font: inherit;
+    font-size: 11px;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    cursor: pointer;
+  }
+
+  #ibs-{{ section.id }} .ibs-pause:hover {
+    color: var(--ibs-ivory);
+  }
+
+  @media (max-width: 720px) {
+    #ibs-{{ section.id }} {
+      min-height: 80vh;
+      min-height: 80svh;
+      padding: clamp(20px, 5vw, 32px) clamp(20px, 5vw, 32px) 28px;
+    }
+
+    #ibs-{{ section.id }} .ibs-inner {
+      gap: 16px;
+      min-height: 0;
+    }
+
+    #ibs-{{ section.id }} .ibs-mid {
+      margin: 4vh 0 2vh;
+    }
+
+    #ibs-{{ section.id }} .ibs-headline {
+      font-size: clamp(36px, 11vw, 56px);
+    }
+
+    #ibs-{{ section.id }} .ibs-rail {
+      flex-direction: column;
+    }
+
+    #ibs-{{ section.id }} .ibs-tenet {
+      gap: 6px;
+    }
+
+    #ibs-{{ section.id }} .ibs-statements {
+      height: 64px;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    #ibs-{{ section.id }} .ibs-statement {
+      transition: opacity 0.3s ease;
+      transform: none;
+    }
+  }
+</style>
+
+<section
+  id="ibs-{{ section.id }}"
+  data-accent="{{ accent_rgb }}"
+  data-glyph="{{ section.settings.glyph | escape }}"
+  aria-label="{{ section.settings.section_label | escape }}"
+>
+  <canvas class="ibs-canvas" aria-hidden="true"></canvas>
+
+  <div class="ibs-inner">
+
+    <div class="ibs-top">
+      <span>{{ section.settings.brand_name | escape }}</span>
+      <span>{{ section.settings.tagline_right | escape }}</span>
+    </div>
+
+    <div class="ibs-mid">
+      <h2 class="ibs-headline">
+        <span>{{ section.settings.headline_line1 | escape }}</span>
+        <span>{{ section.settings.headline_line2 | escape }}</span>
+        <span><em>{{ section.settings.headline_italic | escape }}</em></span>
+      </h2>
+      {%- if section.settings.subtext != blank -%}
+        <p class="ibs-sub">{{ section.settings.subtext | escape }}</p>
+      {%- endif -%}
+    </div>
+
+    <div class="ibs-bottom">
+      {%- if section.blocks.size > 0 -%}
+        <div class="ibs-statements">
+          {%- for block in section.blocks -%}
+            <p
+              class="ibs-statement{% if forloop.first %} is-on{% endif %}"
+              {% unless forloop.first %}aria-hidden="true"{% endunless %}
+            >
+              {{- block.settings.statement | escape -}}
+            </p>
+          {%- endfor -%}
+        </div>
+
+        <div class="ibs-rail" role="group" aria-label="{{ section.settings.tenets_label | escape }}">
+          {%- for block in section.blocks -%}
+            <button
+              type="button"
+              class="ibs-tenet{% if forloop.first %} is-on{% endif %}"
+              aria-pressed="{% if forloop.first %}true{% else %}false{% endif %}"
+              {{ block.shopify_attributes }}
+            >
+              <i>{{ block.settings.numeral | escape }}</i>
+              <b>{{ block.settings.label | escape }}</b>
+            </button>
+          {%- endfor -%}
+        </div>
+      {%- endif -%}
+
+      <div class="ibs-foot">
+        <button type="button" class="ibs-pause" aria-pressed="false" hidden>Pause</button>
+        <p class="ibs-foot-text">{{ section.settings.footer_text | escape }}</p>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<script>
+  (function () {
+    var sectionId = '{{ section.id }}';
+    var root = document.getElementById('ibs-' + sectionId);
+    if (!root) return;
+
+    var canvas = root.querySelector('.ibs-canvas');
+    var ctx = canvas.getContext('2d');
+    var layer = document.createElement('canvas');
+    var layerCtx = layer.getContext('2d');
+    var mask = document.createElement('canvas');
+    var maskCtx = mask.getContext('2d');
+
+    var accent = root.getAttribute('data-accent') || '186,138,28';
+    var glyph = root.getAttribute('data-glyph') || '';
+    var headline = root.querySelector('.ibs-headline');
+    var reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    var W = 0, H = 0, dpr = 1, spacing = 26, step = 9;
+    var mouse = { x: -9999, y: -9999, tx: -9999, ty: -9999 };
+    var pulse = null;
+    var fontReady = !document.fonts;
+    var inView = true;
+    var rafId = 0;
+    var destroyed = false;
+
+    function isRunning() {
+      return !reduceMotion && inView && !document.hidden && !destroyed;
+    }
+
+    function rgba(rgb, alpha) {
+      return 'rgba(' + rgb + ',' + alpha + ')';
+    }
+
+    /* ── Sizing ── */
+    function drawMask() {
+      maskCtx.clearRect(0, 0, W, H);
+      if (!glyph || !fontReady) return;
+
+      var mobile = W < 720;
+      var size = mobile ? Math.min(W * 0.65, H * 0.55) : Math.min(W * 0.52, H * 0.96);
+      var family = headline ? getComputedStyle(headline).fontFamily : 'serif';
+
+      maskCtx.font = '300 ' + size + 'px ' + family;
+      maskCtx.textBaseline = 'middle';
+      maskCtx.fillStyle = '#fff';
+
+      if (mobile) {
+        /* Right-aligned and partly cropped, so it reads as a watermark */
+        maskCtx.textAlign = 'right';
+        maskCtx.fillText(glyph, W + size * 0.1, H * 0.52);
+      } else {
+        maskCtx.textAlign = 'center';
+        maskCtx.fillText(glyph, W * 0.72, H * 0.5);
+      }
+    }
+
+    function resize() {
+      var rect = root.getBoundingClientRect();
+      var nextW = Math.round(rect.width);
+      var nextH = Math.round(rect.height);
+      if (!nextW || !nextH) return;
+
+      W = nextW;
+      H = nextH;
+      var mobile = W < 720;
+      spacing = mobile ? 30 : 26;
+      step = mobile ? 12 : 9;
+      dpr = Math.min(window.devicePixelRatio || 1, mobile ? 1.5 : 2);
+
+      [canvas, layer, mask].forEach(function (c) {
+        c.width = Math.round(W * dpr);
+        c.height = Math.round(H * dpr);
+      });
+      [ctx, layerCtx, maskCtx].forEach(function (c) {
+        c.setTransform(dpr, 0, 0, dpr, 0, 0);
+      });
+
+      drawMask();
+      if (!rafId) renderFrame(performance.now());
+    }
+
+    /* ── Drawing ── */
+    function displace(x, y, t) {
+      var dx = 0, dy = 0;
+
+      var mdx = x - mouse.x, mdy = y - mouse.y;
+      var md = Math.hypot(mdx, mdy);
+      var R = 140;
+      if (md < R && md > 0.001) {
+        var f = (1 - md / R) * 14;
+        dx += (mdx / md) * f;
+        dy += (mdy / md) * f;
+      }
+
+      if (pulse) {
+        var age = (t - pulse.t0) / 1000;
+        if (age < 1.6) {
+          var radius = age * 520;
+          var pdx = x - pulse.x, pdy = y - pulse.y;
+          var pd = Math.hypot(pdx, pdy);
+          var band = Math.max(0, 1 - Math.abs(pd - radius) / 90);
+          var fp = band * (1 - age / 1.6) * 16;
+          if (pd > 0.001) {
+            dx += (pdx / pd) * fp;
+            dy += (pdy / pd) * fp;
+          }
+        } else {
+          pulse = null;
+        }
+      }
+      return [dx, dy];
+    }
+
+    function drawThreads(c, t, alphaH, alphaV, rgb) {
+      var wave = reduceMotion ? 0 : 1.6;
+      var x, y, xx, yy, d, a;
+      c.lineWidth = 1;
+
+      /* Weft: horizontal threads */
+      for (y = spacing / 2; y < H + spacing; y += spacing) {
+        c.beginPath();
+        a = alphaH + (reduceMotion ? 0 : Math.sin(t / 1400 + y * 0.05) * alphaH * 0.35);
+        c.strokeStyle = rgba(rgb, a);
+        for (x = 0; x <= W + step; x += step) {
+          yy = y + Math.sin(x * 0.012 + t / 900 + y * 0.08) * wave;
+          d = displace(x, yy, t);
+          if (x === 0) c.moveTo(x + d[0], yy + d[1]);
+          else c.lineTo(x + d[0], yy + d[1]);
+        }
+        c.stroke();
+      }
+
+      /* Warp: vertical threads */
+      for (x = spacing / 2; x < W + spacing; x += spacing) {
+        c.beginPath();
+        a = alphaV + (reduceMotion ? 0 : Math.sin(t / 1700 + x * 0.04) * alphaV * 0.35);
+        c.strokeStyle = rgba(rgb, a);
+        for (y = 0; y <= H + step; y += step) {
+          xx = x + Math.sin(y * 0.012 + t / 1100 + x * 0.08) * wave;
+          d = displace(xx, y, t);
+          if (y === 0) c.moveTo(xx + d[0], y + d[1]);
+          else c.lineTo(xx + d[0], y + d[1]);
+        }
+        c.stroke();
+      }
+    }
+
+    function renderFrame(t) {
+      mouse.x += (mouse.tx - mouse.x) * 0.12;
+      mouse.y += (mouse.ty - mouse.y) * 0.12;
+
+      ctx.clearRect(0, 0, W, H);
+      drawThreads(ctx, t, 0.055, 0.042, '250,250,250');
+
+      if (fontReady && glyph) {
+        layerCtx.clearRect(0, 0, W, H);
+        drawThreads(layerCtx, t, 0.5, 0.42, accent);
+        layerCtx.globalAlpha = 0.5;
+        drawThreads(layerCtx, t * 0.9, 0.18, 0.14, '250,250,250');
+        layerCtx.globalAlpha = 1;
+
+        /* Keep only the threads that fall inside the glyph */
+        layerCtx.globalCompositeOperation = 'destination-in';
+        layerCtx.drawImage(mask, 0, 0, W, H);
+        layerCtx.globalCompositeOperation = 'source-over';
+
+        ctx.drawImage(layer, 0, 0, W, H);
+      }
+    }
+
+    /* ── Animation loop (runs only while visible) ── */
+    function loop(t) {
+      rafId = 0;
+      if (!isRunning()) return;
+      renderFrame(t);
+      rafId = requestAnimationFrame(loop);
+    }
+
+    function start() {
+      if (!rafId && isRunning()) rafId = requestAnimationFrame(loop);
+    }
+
+    function stop() {
+      if (rafId) {
+        cancelAnimationFrame(rafId);
+        rafId = 0;
+      }
+    }
+
+    /* ── Pointer ── */
+    function onPointerMove(e) {
+      if (!rafId) return;
+      var r = canvas.getBoundingClientRect();
+      mouse.tx = e.clientX - r.left;
+      mouse.ty = e.clientY - r.top;
+    }
+
+    function onPointerLeave() {
+      mouse.tx = -9999;
+      mouse.ty = -9999;
+    }
+
+    root.addEventListener('pointermove', onPointerMove);
+    root.addEventListener('pointerleave', onPointerLeave);
+
+    /* ── Tenets ── */
+    var tenets = root.querySelectorAll('.ibs-tenet');
+    var statements = root.querySelectorAll('.ibs-statement');
+    var pauseBtn = root.querySelector('.ibs-pause');
+    var active = 0;
+    var engaged = false; /* visitor has interacted: stop auto-rotating */
+    var paused = false;
+    var timer = null;
+
+    function setActive(i, fromUser) {
+      if (fromUser) engaged = true;
+      active = i;
+
+      tenets.forEach(function (b, j) {
+        b.classList.toggle('is-on', j === i);
+        b.setAttribute('aria-pressed', j === i ? 'true' : 'false');
+      });
+      statements.forEach(function (p, j) {
+        p.classList.toggle('is-on', j === i);
+        if (j === i) p.removeAttribute('aria-hidden');
+        else p.setAttribute('aria-hidden', 'true');
+      });
+
+      /* Ripple through the threads from the selected tenet */
+      if (rafId && tenets[i]) {
+        var r = canvas.getBoundingClientRect();
+        var br = tenets[i].getBoundingClientRect();
+        pulse = { x: br.left - r.left + br.width / 2, y: br.top - r.top, t0: performance.now() };
+      }
+    }
+
+    tenets.forEach(function (b, i) {
+      b.addEventListener('pointerenter', function (e) {
+        if (e.pointerType === 'mouse') setActive(i, true);
+      });
+      b.addEventListener('click', function () { setActive(i, true); });
+      b.addEventListener('focus', function () { setActive(i, true); });
+    });
+
+    if (!reduceMotion && tenets.length > 1) {
+      timer = setInterval(function () {
+        if (!engaged && !paused && inView && !document.hidden) {
+          setActive((active + 1) % tenets.length, false);
+        }
+      }, 4500);
+
+      if (pauseBtn) {
+        pauseBtn.hidden = false;
+        pauseBtn.addEventListener('click', function () {
+          paused = !paused;
+          pauseBtn.setAttribute('aria-pressed', paused ? 'true' : 'false');
+          pauseBtn.textContent = paused ? 'Play' : 'Pause';
+        });
+      }
+    }
+
+    /* ── Lifecycle ── */
+    function onVisibility() {
+      if (document.hidden) stop();
+      else start();
+    }
+
+    var io = null;
+    if ('IntersectionObserver' in window) {
+      io = new IntersectionObserver(function (entries) {
+        inView = entries[0].isIntersecting;
+        if (inView) start();
+        else stop();
+      });
+      io.observe(root);
+    }
+
+    var ro = null;
+    var resizeFrame = 0;
+    function onResize() {
+      cancelAnimationFrame(resizeFrame);
+      resizeFrame = requestAnimationFrame(resize);
+    }
+    if ('ResizeObserver' in window) {
+      ro = new ResizeObserver(onResize);
+      ro.observe(root);
+    } else {
+      window.addEventListener('resize', onResize);
+    }
+
+    document.addEventListener('visibilitychange', onVisibility);
+
+    function destroy(event) {
+      if (event && event.detail && event.detail.sectionId !== sectionId) return;
+      destroyed = true;
+      stop();
+      clearInterval(timer);
+      cancelAnimationFrame(resizeFrame);
+      if (io) io.disconnect();
+      if (ro) ro.disconnect();
+      window.removeEventListener('resize', onResize);
+      document.removeEventListener('visibilitychange', onVisibility);
+      document.removeEventListener('shopify:section:unload', destroy);
+    }
+
+    /* Theme editor removes/re-renders sections without a page reload */
+    document.addEventListener('shopify:section:unload', destroy);
+
+    /* ── Boot ── */
+    resize();
+    start();
+
+    if (document.fonts && document.fonts.ready) {
+      document.fonts.ready.then(function () {
+        if (destroyed) return;
+        fontReady = true;
+        drawMask();
+        if (!rafId) renderFrame(performance.now());
+      });
+    }
+  })();
+</script>
+
+{% schema %}
+{
+  "name": "Interactive brand section",
+  "tag": "div",
+  "class": "section-interactive-brand",
+  "settings": [
+    {
+      "type": "text",
+      "id": "section_label",
+      "label": "Section accessible label",
+      "default": "Our standards"
+    },
+    { "type": "color", "id": "bg_color", "label": "Background colour", "default": "#0C0404" },
+    { "type": "color", "id": "accent_color", "label": "Accent colour", "default": "#BA8A1C" },
+    {
+      "type": "checkbox",
+      "id": "load_fonts",
+      "label": "Load Cormorant Garamond and Inter from Google Fonts",
+      "info": "Turn off if your theme already provides these fonts.",
+      "default": true
+    },
+
+    { "type": "header", "content": "Top bar" },
+    { "type": "text", "id": "brand_name", "label": "Brand name (left)", "default": "Maison" },
+    { "type": "text", "id": "tagline_right", "label": "Tagline (right)", "default": "Our standards" },
+
+    { "type": "header", "content": "Headline" },
+    { "type": "text", "id": "headline_line1", "label": "Line 1", "default": "Made." },
+    { "type": "text", "id": "headline_line2", "label": "Line 2", "default": "Never" },
+    { "type": "text", "id": "headline_italic", "label": "Italic accent word", "default": "rushed." },
+    {
+      "type": "textarea",
+      "id": "subtext",
+      "label": "Subtext",
+      "default": "Every detail is considered. Move your cursor through the cloth."
+    },
+    {
+      "type": "text",
+      "id": "glyph",
+      "label": "Large glyph revealed in the threads",
+      "info": "A short number or letter(s), for example 01. Leave empty to hide.",
+      "default": "01"
+    },
+
+    { "type": "header", "content": "Bottom bar" },
+    { "type": "text", "id": "tenets_label", "label": "Tenet group accessible label", "default": "Our three standards" },
+    { "type": "text", "id": "footer_text", "label": "Footer line", "default": "Not a promise. A practice." }
+  ],
+  "blocks": [
+    {
+      "type": "tenet",
+      "name": "Standard",
+      "limit": 4,
+      "settings": [
+        { "type": "text", "id": "numeral", "label": "Numeral", "default": "I" },
+        { "type": "text", "id": "label", "label": "Tab label", "default": "Colour" },
+        { "type": "text", "id": "statement", "label": "Statement", "default": "Colour that holds." }
+      ]
+    }
+  ],
+  "presets": [
+    {
+      "name": "Interactive brand section",
+      "blocks": [
+        {
+          "type": "tenet",
+          "settings": { "numeral": "I", "label": "Colour", "statement": "Colour that holds." }
+        },
+        {
+          "type": "tenet",
+          "settings": { "numeral": "II", "label": "Cloth", "statement": "Cloth that earns its place." }
+        },
+        {
+          "type": "tenet",
+          "settings": { "numeral": "III", "label": "Construction", "statement": "Built in. Never added on." }
+        }
+      ]
+    }
+  ]
+}
+{% endschema %}
